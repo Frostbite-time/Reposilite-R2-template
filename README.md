@@ -57,7 +57,7 @@ docker run -d --name reposilite --restart unless-stopped --env-file .env -p 8080
 | `REPOSILITE_REPOSITORIES` | | `releases,snapshots,private:private` | 仓库列表，格式 `名称[:可见性]` |
 | `R2_PREFIX` | | 空 | 桶内对象前缀，与其他服务共用桶时使用 |
 | `R2_ENDPOINT` | | `https://<账户ID>.r2.cloudflarestorage.com` | 自定义端点，如欧盟辖区 `https://<账户ID>.eu.r2.cloudflarestorage.com` |
-| `JAVA_OPTS` | | | JVM 参数，如 `-Xmx256m` |
+| `JAVA_OPTS` | | | JVM 参数，如 `-Xmx256m`；构件缓存时间默认 1 天，可用 `-Dreposilite.maven.maxAge=<秒>` 修改 |
 | `REPOSILITE_VERSION` | | `3.6.3` | Reposilite 版本，修改后 `docker compose up -d --build` |
 
 可见性：`public` 任何人可读、可浏览；`hidden` 任何人可按完整路径下载，但无令牌时不显示、不能浏览目录；`private` 需令牌才能读。**部署（写入）始终需要令牌。**
@@ -134,11 +134,21 @@ publishing {
       reverse_proxy 127.0.0.1:8080
   }
   ```
-- **经 Cloudflare 代理（橙色云朵）时**，免费套餐单个请求体上限为 100 MB，更大的构件会上传失败。
+- **缓存**：jar、pom 等构件文件响应 `Cache-Control: public, max-age=86400`（1 天）。发布后的版本不可覆盖（snapshot 文件名自带时间戳），长缓存是安全的；会变化的 `maven-metadata.xml` 及其校验文件始终不缓存。
 - **网页 Settings 页为只读**：仓库配置由环境变量生成。修改 `.env` 后执行 `docker compose up -d` 即可重建生效；需要更多定制（如代理 Maven Central）可直接修改 `r2-entrypoint.sh` 中生成的 JSON。
 - **数据位置**：构件在 R2；令牌和下载统计在数据卷 `reposilite-data`（SQLite）中，不要随意删除该卷。
 - **管理员令牌**是每次启动时按环境变量创建的临时令牌，修改 `.env` 并重建容器即可轮换。
 - **排错**：`docker compose logs -f`。启动时会先输出 `[r2]` 开头的配置摘要；环境变量缺失或格式不对会直接报错退出。
+
+## 使用 Cloudflare 代理（橙色云朵）时
+
+- **私有仓库必须绕过缓存**：Reposilite 对所有构件文件都返回 `Cache-Control: public`，不区分仓库是否私有，而 Cloudflare 默认缓存 `.jar`。不加规则的话，有权限的人下载过的私有 jar 会被缓存，之后匿名用户也能直接拿到。在 **缓存 → Cache Rules** 新建规则：条件为「主机名等于你的域名」且「URI 路径开头为 `/private/`」（其他私有仓库同理），缓存资格选 **绕过缓存**。
+- **缓存 pom 和校验文件（可选）**：Cloudflare 默认只缓存 jar 等扩展名，而 Maven 请求最多的 `.pom`、`.sha1` 等默认不缓存。可再建一条规则，表达式：
+  ```
+  (http.host eq "maven.example.com" and http.request.uri.path.extension in {"pom" "module" "sha1" "md5" "sha256" "sha512" "asc"} and not starts_with(http.request.uri.path, "/private/"))
+  ```
+  缓存资格选 **符合缓存条件**，边缘 TTL 选「有 cache-control 标头就使用，没有则绕过缓存」。这样 `maven-metadata.xml` 的校验文件和 404 响应都不会被缓存。
+- **上传上限**：免费套餐单个请求体最大 100 MB，更大的构件上传会返回 413。有需要的话，另建一条不开代理（灰色云朵）的 DNS 记录专门用于上传。
 
 ## 工作原理
 
@@ -169,4 +179,4 @@ publishing {
 }
 ```
 
-同时附加 JVM 参数 `-Dreposilite.s3.pathStyleAccessEnabled=true -Dreposilite.s3.skip-bucket-creation=true`（桶级令牌无权建桶，所以不自动建桶），并设置 `AWS_REQUEST_CHECKSUM_CALCULATION=WHEN_REQUIRED`，避免新版 AWS SDK 默认的 CRC 校验头在 R2 上出问题。
+同时附加 JVM 参数 `-Dreposilite.s3.pathStyleAccessEnabled=true -Dreposilite.s3.skip-bucket-creation=true -Dreposilite.maven.maxAge=86400`（桶级令牌无权建桶，所以不自动建桶；构件缓存 1 天，Reposilite 默认只有 1 小时），并设置 `AWS_REQUEST_CHECKSUM_CALCULATION=WHEN_REQUIRED`，避免新版 AWS SDK 默认的 CRC 校验头在 R2 上出问题。

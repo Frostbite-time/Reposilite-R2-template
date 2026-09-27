@@ -95,9 +95,11 @@ IFS=$old_ifs; set +f
 # 文件含密钥：先删后建（避开 /tmp 的 protected_regular 限制），仅属主可读
 rm -f "$CONFIG_FILE"
 (umask 077; printf '{\n  "maven": {\n    "repositories": [%s\n    ]\n  }\n}\n' "$repos_json" > "$CONFIG_FILE")
-# 官方 entrypoint 会切换到 reposilite 用户（默认 uid/gid 977）运行，需要能读到配置
+# 官方 entrypoint 会切换到 reposilite 用户（默认 uid/gid 977）运行，需要能读到配置；
+# 它只在数据卷属主不对（通常是首次启动）时才修正日志目录，重建容器后日志目录又是 root 的，这里每次都修正
 if [ "$(id -u)" = 0 ]; then
   chown "${PUID:-977}:${PGID:-977}" "$CONFIG_FILE"
+  if [ -d /var/log/reposilite ]; then chown -R "${PUID:-977}:${PGID:-977}" /var/log/reposilite; fi
 fi
 
 # ---------- 启动参数 ----------
@@ -108,8 +110,9 @@ case " ${REPOSILITE_OPTS:-} " in
   *) wd_opt='--working-directory=/app/data ' ;;
 esac
 export REPOSILITE_OPTS="${wd_opt}--shared-configuration=$CONFIG_FILE --token=$ADMIN_NAME:$ADMIN_SECRET ${REPOSILITE_OPTS:-}"
-# path-style 访问；R2 桶需事先创建（桶级「对象读和写」令牌无权建桶）
-export JAVA_OPTS="-Dreposilite.s3.pathStyleAccessEnabled=true -Dreposilite.s3.skip-bucket-creation=true ${JAVA_OPTS:-}"
+# path-style 访问；R2 桶需事先创建（桶级「对象读和写」令牌无权建桶）；
+# 构件缓存 1 天（Reposilite 默认 1 小时，maven-metadata.xml 始终不缓存）。用户的 JAVA_OPTS 在后面，可覆盖这些默认值
+export JAVA_OPTS="-Dreposilite.s3.pathStyleAccessEnabled=true -Dreposilite.s3.skip-bucket-creation=true -Dreposilite.maven.maxAge=86400 ${JAVA_OPTS:-}"
 
 log "端点：$R2_ENDPOINT"
 log "存储：$R2_BUCKET/${R2_PREFIX:+$R2_PREFIX/}<仓库名>/"
