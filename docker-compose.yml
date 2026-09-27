@@ -1,0 +1,20 @@
+services:
+  reposilite:
+    build:
+      context: .
+      args:
+        REPOSILITE_VERSION: ${REPOSILITE_VERSION:-3.6.3}
+    container_name: reposilite
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${REPOSILITE_PORT:-8080}:8080"
+    volumes:
+      # 令牌、统计等元数据（SQLite）；构件本身存放在 R2
+      - reposilite-data:/app/data
+    # 允许 docker attach reposilite 使用交互式控制台（Ctrl+P Ctrl+Q 退出）
+    stdin_open: true
+    tty: true
+
+volumes:
+  reposilite-data:
