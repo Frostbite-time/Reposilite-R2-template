@@ -1,1 +1,4 @@
 .env
+*.jar
+quota-guard/build/
+.cf-analytics-token

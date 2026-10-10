@@ -1,2 +1,8 @@
 *
+!Dockerfile
 !r2-entrypoint.sh
+!quota-control.sh
+!quota-guard/
+!quota-guard/src/
+!quota-guard/src/main/
+!quota-guard/src/main/**

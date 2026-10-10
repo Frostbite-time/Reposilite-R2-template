@@ -102,6 +102,16 @@ if [ "$(id -u)" = 0 ]; then
   if [ -d /var/log/reposilite ]; then chown -R "${PUID:-977}:${PGID:-977}" /var/log/reposilite; fi
 fi
 
+# 额度台账沿用数据卷；在官方 entrypoint 切换用户前准备可写目录。
+if [ "$(printf '%s' "${R2_QUOTA_ENABLED:-true}" | tr '[:upper:]' '[:lower:]')" = true ]; then
+  quota_db=$(readlink -m "${R2_QUOTA_DB:-/app/data/r2-quota/quota.db}")
+  case "$quota_db" in /app/data/*) ;; *) die "R2_QUOTA_DB 必须位于持久化的 /app/data/ 内" ;; esac
+  export R2_QUOTA_DB=$quota_db
+  quota_dir=$(dirname "$quota_db")
+  mkdir -p "$quota_dir"
+  if [ "$(id -u)" = 0 ]; then chown "${PUID:-977}:${PGID:-977}" "$quota_dir"; fi
+fi
+
 # ---------- 启动参数 ----------
 # 官方 entrypoint 只在 REPOSILITE_OPTS 不含 "-wd" 子串时才设置工作目录，
 # 这里显式指定，避免密钥里恰好含 "-wd" 时数据写到卷外
