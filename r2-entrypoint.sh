@@ -104,6 +104,11 @@ fi
 
 # 额度台账沿用数据卷；在官方 entrypoint 切换用户前准备可写目录。
 if [ "$(printf '%s' "${R2_QUOTA_ENABLED:-true}" | tr '[:upper:]' '[:lower:]')" = true ]; then
+  # 没有统计令牌时同步必然失败，所有 R2 请求都会被拦下；与其启动后处处报 500，不如直接说明原因
+  if [ "$(printf '%s' "${R2_QUOTA_SYNC_ENABLED:-true}" | tr '[:upper:]' '[:lower:]')" = true ] \
+      && [ -z "${CF_R2_ANALYTICS_TOKEN:-}" ] && [ -z "${CF_R2_ANALYTICS_TOKEN_FILE:-}" ]; then
+    die "请设置 CF_R2_ANALYTICS_TOKEN（Cloudflare「账户分析：读取」令牌，额度保护用它核对用量）；不需要额度保护可设 R2_QUOTA_ENABLED=false"
+  fi
   quota_db=$(readlink -m "${R2_QUOTA_DB:-/app/data/r2-quota/quota.db}")
   case "$quota_db" in /app/data/*) ;; *) die "R2_QUOTA_DB 必须位于持久化的 /app/data/ 内" ;; esac
   export R2_QUOTA_DB=$quota_db

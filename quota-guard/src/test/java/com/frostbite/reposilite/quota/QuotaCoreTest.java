@@ -124,6 +124,9 @@ public final class QuotaCoreTest {
         }
         e.put("R2_QUOTA_BILLING_DAY", "1");
         fails(() -> { try (QuotaStore ignored = new QuotaStore(new QuotaConfig(e), clock)) { } });
+        Map<String, String> manual = env(root.resolve("manual.db"));
+        manual.remove("R2_QUOTA_REQUIRE_INITIAL_SYNC");
+        check(!new QuotaConfig(manual).requireSync, "disabling sync left the initial-sync gate permanently closed");
         BillingPeriod february = BillingPeriod.current(Instant.parse("2026-02-28T00:00:00Z"), 31, ZoneOffset.UTC);
         check(february.start.equals(Instant.parse("2026-02-28T00:00:00Z")), "short-month boundary failed");
         System.out.println("PASS: initial sync gate, billing rollover and calendar-change protection");

@@ -17,7 +17,8 @@ final class QuotaConfig {
     QuotaConfig(Map<String, String> env) {
         enabled = flag(env, "R2_QUOTA_ENABLED", true);
         syncEnabled = flag(env, "R2_QUOTA_SYNC_ENABLED", true);
-        requireSync = flag(env, "R2_QUOTA_REQUIRE_INITIAL_SYNC", true);
+        // Without automatic sync nothing would ever initialize a period, so the gate defaults to off.
+        requireSync = flag(env, "R2_QUOTA_REQUIRE_INITIAL_SYNC", syncEnabled);
         limitA = number(env, "R2_QUOTA_CLASS_A_LIMIT", 900_000, 0, Long.MAX_VALUE);
         limitB = number(env, "R2_QUOTA_CLASS_B_LIMIT", 9_000_000, 0, Long.MAX_VALUE);
         syncIntervalSeconds = number(env, "R2_QUOTA_SYNC_INTERVAL_SECONDS", 86400, 60, 2_678_400);
