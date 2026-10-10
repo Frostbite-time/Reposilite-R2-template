@@ -77,7 +77,14 @@ final class CloudflareSync {
             if (n < 0) throw new IOException("Negative R2 analytics count");
             OperationClass type;
             try { type = OperationClass.classify(action.asText()); }
-            catch (IllegalArgumentException e) { throw new IOException(e.getMessage(), e); }
+            catch (IllegalArgumentException e) {
+                // Analytics also includes control-plane operations absent from the pricing table.
+                // Reserve against both budgets rather than ignoring them or preventing every sync.
+                a = Math.addExact(a, n); b = Math.addExact(b, n);
+                System.err.println("[r2-quota] Unclassified analytics operation " + action.asText()
+                    + ": reserving " + n + " against both A and B");
+                continue;
+            }
             if (type == OperationClass.A) a = Math.addExact(a, n);
             if (type == OperationClass.B) b = Math.addExact(b, n);
         }

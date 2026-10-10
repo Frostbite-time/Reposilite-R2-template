@@ -132,9 +132,10 @@ public final class QuotaCoreTest {
     private static void analyticsParsing() throws Exception {
         String body = new ObjectMapper().writeValueAsString(Map.of("data", Map.of("viewer", Map.of("accounts", List.of(
             Map.of("r2OperationsAdaptiveGroups", List.of(
-                group("ListObjects", 5), group("GetObject", 8.2), group("DeleteObject", 50))))))));
+                group("ListObjects", 5), group("GetObject", 8.2), group("DeleteObject", 50),
+                group("GetBucketNotificationConfiguration", 3), group("GetBucketSippyConfiguration", 5))))))));
         long[] counts = CloudflareSync.parse(body);
-        check(counts[0] == 5 && counts[1] == 9, "analytics classification/rounding failed");
+        check(counts[0] == 13 && counts[1] == 17, "analytics classification/rounding/unknown-operation reserve failed");
         fails(() -> CloudflareSync.parse("{\"errors\":[{\"message\":\"denied\"}]}"));
         fails(() -> CloudflareSync.parse("{\"data\":{\"viewer\":{\"accounts\":[]}}}"));
         fails(() -> OperationClass.classify("UnknownNewOperation"));
